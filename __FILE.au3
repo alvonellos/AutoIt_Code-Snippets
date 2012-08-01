@@ -4,7 +4,8 @@
  Author:         Alexander Alvonellos
 
  Script Function:
-	File function header to do stuff.
+	File function header. It does a lot of stuff.
+	... just look. 
 
  Changelog:
 	Created on 06/25/2012
@@ -15,7 +16,8 @@
 #include <File.au3>
 #include <Crypt.au3>
 #include <Array.au3>
-#include "..\Include\__STACK.au3"
+; #include "..\Include\__STACK.au3"
+#include "__STACK.au3"
 AutoItSetOption("MustDeclareVars", 1)
 
 ; Defines the default logging function to be used for
@@ -109,11 +111,7 @@ EndFunc
 ; This one is a bit of a biggie. I know a reader other
 ; than me would tell me that this is COMPLETELY reinventing
 ; the wheel and is more than necessary... it is, BUT it's
-; completely necessary. Work for <deleted> a little longer
-; and see how crap randomly blindsides you.
-;
-; I plan on replacing this in the future. But, just in case,
-; here is how it works...
+; completely necessary... trust me.
 ;
 ; This script performs a DFS (Depth First Traversal) iteratively
 ; on a directory tree given the full path of the root directory to
