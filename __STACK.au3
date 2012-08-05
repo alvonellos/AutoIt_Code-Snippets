@@ -6,27 +6,6 @@
  Script Function:
 	A simple stack data structure for strings
 
- Remarks:
-	This an array-based stack data structure. There are
-	a couple of things you need to know before using it:
-	
-	1) This stack is implemented as an array. So, the size
-	   of the stack, in terms of allocated space, doubles
-	   each time the limit of the stack is resized. Yes, it
-	   uses ReDim, but the usage of that function is minimized
-	   due to the exponential expansion of the stack. 
-	2) When pop() is called, it will not free any memory from
-	   use. That must be done manually using __STACK__DEALLOC(),
-	   which will erase all of the data in the stack and reset
-	   the counters. 
-	3) The save() and load() functions are designed to have two
-	   modes. The first mode, by default, is to basically seri-
-	   alize the stack into a file. This means that space that
-	   has been allocated, but not used, will be written to the
-	   file in form of many "0xDEADBEEF" strings. This is the
-	   deletion constant. The second mode stores the stack in a
-	   trimmed format. 
-	4) I like long variable names, you'll thank me later. 
 
 #ce ----------------------------------------------------------------------------
 

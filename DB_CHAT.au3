@@ -1,4 +1,5 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
@@ -8,14 +9,11 @@
  Author:         Alexander Alvonellos
 
  Script Function:
-	A chat client over DB...
-	It's not really so much of a
-	chat client as it is a way to
-	demonstrate usage of __DROPBOX.au3
+	A chat client over DB
 
 #ce ----------------------------------------------------------------------------
 
-#include "__DROPBOX.au3"
+#include "..\Include\__DROPBOX.au3"
 HotKeySet("^s", "input")
 HotKeySet("{ESC}", "abort")
 main()
@@ -23,6 +21,7 @@ Func abort()
 	__DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir)
 	Exit
 EndFunc
+
 Func main()
 	__DROPBOX__COMM__CREATE_CHANNEL("comm", @ScriptDir, "dumb")
 	__DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "DGparser", "dumb")

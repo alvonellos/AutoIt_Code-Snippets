@@ -4,12 +4,7 @@
  Author:         Alexander Alvonellos
 
  Script Function:
-	I'm lazy. Really lazy. So lazy that I'd rather #include
-	something than have to write it over and over and over
-	again. I've found that _Singleton is something that I
-	use a lot, so I put it in this file. 
-
-	All you have to do is #include it. 
+	Test Singleton
 
  Changelog:
 	06/13/12 - Created and working as of 06/13/12
@@ -18,7 +13,7 @@
 
 #include <Misc.au3>
 #include-once
-__SINGLETON_SINGLETON()
+
 ; My version of singleton. To use it, include
 ; the header
 Func __SINGLETON_SINGLETON()

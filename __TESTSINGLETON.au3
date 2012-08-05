@@ -12,6 +12,7 @@
 #ce ----------------------------------------------------------------------------
 
 #include "__SINGLETON.au3"
+__SINGLETON_SINGLETON()
 While(True)
 	Sleep(100)
 WEnd
