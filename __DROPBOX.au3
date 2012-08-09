@@ -4,13 +4,190 @@
  Author:         Alexander Alvonellos
 
  Script Function:
-		Misc collection of functions to be
-	used with dropbox.
+	This is a library containing four namespaces, all with different functions
+	related to working with, around, on, or about Dropbox in some way:
+	1). The __DROPBOX__ namespace contains functions that are used to interact
+		with dropbox and the dropbox itself.
 
-	This version is the Beta version that's currently in development,
-	not to say that the regular dropbox.au3 file is finished, but it
-	at least works (somewhat) correctly in the __COMM part of the
-	function
+	2). The __DROPBOX__COMM namespace is a sister project that allows scripts
+		to communicate with one another through dropbox.
+	3). The __DROPBOX__TEST namespace is a namespace filled with functions that
+		were used to test functionality of that particular namespace, and so I left
+		them there as an example.
+	4). The __DROPBOX__COMM__TEST namespace is another namespace whose function is
+		the same as the __DROPBOX__TEST namespace.
+
+	Since this project is so big, I had no other option than to separate the
+	functions into their own namespaces. I haven't finished writing the general
+	help file yet, so any reference needs to be made in accordance with the
+	description that is above the function.
+
+	Coding conventions:
+		1). I like long identifier names when I have to work on a script over a large
+			period of time, so it's easier to read, understand, and pick right off
+			where I started after I've stopped coding for awhile. Don't get put off
+			by them. Sometimes I'll create a really long identifier, and then create
+			a alias of it right below it.
+
+		2). Functions are separated into namespaces, there are actually five
+			namespaces: __DROPBOX, __DROPBOX__COMM, __DROPBOX__COMM__TEST,
+			__DROPBOX__TEST, and PRIVATE__. They're pretty self explanatory.
+
+		3). When I say "BAD MAGIC" in a comment, error log, and such, that means
+			a logical contradiction has occurred and it's probably a bug. Let me
+			know what it is.
+
+	Known issues:
+		None that I've found after debugging today.
+
+	For best results:
+		1). Optimize the size & number of your datagrams accordingly. The
+			more sparse files you have, the slower the script will run.
+
+	Tasklist:
+		`08/07/12 Alex -> Alex :: Debug more. => Incompl.
+		 08/07/12 Alex -> Any  :: Tag all magic numbers => Incompl.
+		 08/07/12 Alex -> Any  :: Remote execution => Incomplete
+		 08/07/12 Alex -> Any  :: Binary data transmission => Incompl.
+
+#ce
+#cs -- Reasoning, justification, and design decisions behind __DROPBOX__COMM__
+	Reasoning behind __DROPBOX__COMM & design decisions.:
+		1). Reasoning:
+
+			I got very sick and tired of dealing with sockets and networking for
+			communication between my scripts. It can be unreliable, uncomfortable
+			and unnatural to code in, and took a long time to write, and I didn't
+			want to use SOAP or any kind of RESTful oriented architecture, http
+			nonsense, or anything of that sort -- I just wanted it to work. I
+			thought that I'd have to write my own TCP/IP library that made working
+			with networking more comfortable and natural.
+
+			So, while I was writing __DROPBOX, I started to wonder if I could use
+			dropbox to communicate with scripts over, but in a very natural way,
+			like I would using a pipe, a file, or a "channel" like I would talk
+			with people in IRC, then later that day, while I was working on an
+			old SCO/UNIX system, I remembered... "everything is a file" and it
+			all made a lot of sense:
+				"Communicate over networks using files, just like Plan 9, UNIX
+				and so on, communicates with."
+
+			... It hit me like a ton of bricks.
+
+			The next step was to think out how it would all work...
+
+		2).  Design Decisions
+			The model behind __DROPBOX__COMM() is a subscriber->reciever model
+			like you would use a ham radio, but a few more perks that allow
+			scripts to communicate with them through. There are several modes of
+			communication that follow this model of a ham radio:
+				1). Many to Many
+					All members can contribute and hear all other members.
+				2). Many to One
+					All members can contribute, but only one can be listening.
+				3). One to One
+					One to one connection between one computer and another by
+					switching channels.
+				4). One to none.
+
+			It started to make more and more sense as I went along. but how was
+			I going to enable the natural model of reading, writing, and subscribing
+			to a channel and working with this data using just a file system, and no
+			packets? I didn't know right away, so I mapped out the functions that I'd
+			need to implement conforming to the interface of channel based communication.
+
+			Bingo.
+
+			One of the first things that I do when I go to write a script, is to figure
+			out what functions I need and start ordering them. knew that I'd need several
+			main functions:
+				__CREATE_CHANNEL()
+				__REMOVE_CHANNEL()
+				__WRITE()
+				__READ()
+
+			... And then the problems began:
+			a). File based communication
+				One of the trade offs with using files to send messages through
+				is that I have to sacrifice speed for the sake of ease, I wanted
+				to be able to gloat about reliability, so I set out with the purpose
+				of making this as reliable as possible.
+
+				There are a couple of problems with that, especially when dealing
+				with dropbox. Speed, synchronization, file locking, and such all
+				come into the equation, and have greatly influenced my design
+				decisions.
+
+				This library has some serious limitations in terms of speed. Only
+				one datagram can be sent a second, and the reasoning behind that
+				is two fold:
+					i). I didn't want to have to store a list of which datagrams
+						had been read or missed, nor did I want to have to open
+						each and every file and perform checksums or do any of
+						that. So I decided to use a time variable as a name.
+
+						And so I decided on using epoch time for the file name. It makes
+						it very easy to deal with conflicts when communicating over
+						dropbox, because when a conflict occurs, dropbox will
+						automatically rename it and append the (*conflicted*).ext
+						to the file name. Which is great, because it won't interfere
+						with the program, and if the extension is the same, that means
+						that both files were submitted at the same time and it doesn't
+						really matter if you recieve them in order or not. However, if
+						multiple sequential writes are performed in the same second
+						, then the files will get clobbered. So we delay a write by
+						1 second.
+
+						I also found out that if I use unix epoch time, I can process
+						the datagrams in order, sort them, manipulate them, and even
+						store the name of the file in a configuration file, so if I
+						decide to leave a few datagrams in a channel, when the subscriber
+						comes back online, they can recieve the messages.
+
+						...You can't do that with TCP/IP.
+					ii). I don't trust that the system timer can readily
+						 measure time into the millisecond.
+
+						 I didn't want the computer to have to read over many files
+						 it had already read before getting to the ones it had not
+						 read, and so, what I've done is to store the filename
+						 of the last read file (which is in unix epoch time of course)
+						 in a .ini file with the computers name and listener function
+						 and read that and only read files that are newer than that
+						 date. If I use a millisecond timer, there's a greater chance
+						 that datagrams can get lost.
+
+			b). Threading
+				1). AutoIt doesn't have threads, and if I wanted to use a true
+					channel->subscriber model, then I'd need to use them.
+
+					I settled for using AdLibRegister, but the problem with
+					AdLibRegister and AdLibUnregister is that the function,
+					its parameters, and such will need to change, dynamically.
+
+					And so so I heavily abused Assign, Eval, and Call.
+
+			c). External libraries
+				They're a pain, and so I used my own.
+
+			d). Others
+				This project has taken a lot of code and a lot of time to
+				write, and so there's some difficulty in maintaining it
+				because it's so large. I want to be able to reuse this
+				over and over again, and so I've taken time and a great
+				deal of deliberation in writing this, so I'm considering
+				situations where I want to be notified.
+
+			how am I going to identify which files
+			to read, or how I'm going to format the datagrams.
+			How am I going to deal with threads, when autoit has none
+			how am I going to allow the user direct interaction with the
+			files while not wanting them to have to look into this script
+			before they start writing it?
+
+		3). Further justification
+			a). If I need to justify anything else or I have missed anything
+				please let me know.
 
 #ce ----------------------------------------------------------------------------
 #include-once
@@ -21,60 +198,204 @@
 #include <File.au3>
 
 ;; Configuration Options
-Global $__DROPBOX__iPROCESSWAIT_INTERVAL = 1
-Global $__DROPBOX__iDEFAULT_CHANNEL_POLLING_PERIOD = 500
-Global $__DROPBOX__iDEFAULT_MAX_REGISTERED_SUBSCRIBERS = 1024
+
+	; If the logging is too verbose
+	; and you just want it to shutup,
+	; set this to true.
+	Global $__DROPBOX__bHUSH_CERR = False
+	Func __DROPBOX__HUSH_CERR()
+		$__DROPBOX__bHUSH_CERR = True
+	EndFunc
+	Func __DROPBOX__UNHUSH_CERR()
+		$__DROPBOX__bHUSH_CERR = False
+	EndFunc
+
+	; This is the interval to wait for dropbox to
+	; appear before timing out.
+	Global $__DROPBOX__iPROCESSWAIT_INTERVAL = 1
+
+;;  __COMM__ namespace configuration options
+	; This is the interval to wait to poll the channels
+	Global $__DROPBOX__iDEFAULT_CHANNEL_POLLING_PERIOD = 250
+
+	; This is the interval to wait between subscriber notifications
+	Global $__DROPBOX__iINTERVAL_BETWEEN_SUBSCRIBER_NOTIFY = 0
+
+	; This variable is pretty self explanatory.
+	Global $__DROPBOX__iDEFAULT_MAX_REGISTERED_SUBSCRIBERS = 1024
 ;; End configutation options.
 
-;; Globals
-Global $__DROPBOX__REGISTERED_SUBSCRIBERS = 0
+;; Globals - Don't touch
+	Global $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = 0
+	Global $PRIVATE__DROPBOX__COMM__NUMBER_DIGITS_IN_EPOCH _
+		   = StringLen(__DROPBOX__COMM__EPOCH())
 
-; Contains a pipe delimited string containing
-; function names to call. (Used in __PARSE_SUBSCRIBERS
-; and __SUBSCRIBE and UNSUBSCRIBE)
-Global $__DROPBOX__szREGISTERED_FUNCTIONS = ""
+	; Contains a pipe delimited string containing
+	; function names to call. (Used in __PARSE_SUBSCRIBERS
+	; and __SUBSCRIBE and UNSUBSCRIBE)
+	Global $__DROPBOX__szREGISTERED_FUNCTIONS = ""
 ;; End globals
- ;;__DROPBOX__TEST()
+; __DROPBOX__COMM__TEST_CREATE_REMOVE_CHANNEL()
+;Sleep(10000)
+;ConsoleWrite(@LF)
+
+;__DROPBOX__COMM__TEST_WRITE_READ()
+;Sleep(10000)
+;ConsoleWrite(@LF)
+
+;__DROPBOX__COMM__TEST_SUBSCRIBE_UNSUBSCRIBE()
+;Sleep(10000)
+
+;ConsoleWrite(@LF & @LF & @LF & @LF)
+; __DROPBOX__COMM__TEST_MULTICHANNEL_MULTISUBSCRIBER()
+; Sleep(10000)
 
 ; This function demonstrates is used to test
 ; the UDF while in development and serves as
 ; a reference on how to use it.
 Func __DROPBOX__TEST()
-	;ConsoleWrite("__DROPBOX__CHECK_EXIST:> " & __DROPBOX__CHECK_EXIST() & @LF)
-	;ConsoleWrite("__DROPBOX__INITIALIZE():> " & __DROPBOX__INITIALIZE() & @LF)
-	;ConsoleWrite("__DROPBOX__TERMINATE():> " & __DROPBOX__TERMINATE() & @LF)
-	;ConsoleWrite("__DROPBOX__INITIALIZE():> " & __DROPBOX__INITIALIZE() & @LF)
+	ConsoleWrite("__DROPBOX__CHECK_EXIST:> " & __DROPBOX__CHECK_EXIST() & @LF)
+	ConsoleWrite("__DROPBOX__INITIALIZE():> " & __DROPBOX__INITIALIZE() & @LF)
+	ConsoleWrite("__DROPBOX__TERMINATE():> " & __DROPBOX__TERMINATE() & @LF)
+	ConsoleWrite("__DROPBOX__INITIALIZE():> " & __DROPBOX__INITIALIZE() & @LF)
+EndFunc
+
+Func __DROPBOX__COMM__TEST_DUMPVARS()
+		ConsoleWrite("--> __DROPBOX__COMM__TEST_SUBSCRIBE_UNSUBSCRIBE(), $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = " & _
+					 $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS & @LF)
+		COnsoleWrite("--> __DROPBOX__COMM__TEST_DUMPVARS(), $__DROPBOX__szREGISTERED_FUNCTIONS = " & $__DROPBOX__szREGISTERED_FUNCTIONS & @LF)
+EndFunc
+Func __DROPBOX__COMM__TEST_CREATE_REMOVE_CHANNEL()
+	 ConsoleWrite("Testing __CREATE_CHANNEL() and __REMOVE_CHANNEL" & @LF)
+	 __DROPBOX__COMM__TEST_DUMPVARS()
 	 __DROPBOX__COMM__CREATE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
-	;__DROPBOX__COMM__REMOVE_CHANNEL(@ScriptDir, "__DROPBOX__CERR")
+	 __DROPBOX__COMM__TEST_DUMPVARS()
+	 Sleep(10000)
+	 __DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	 __DROPBOX__COMM__TEST_DUMPVARS()
+EndFunc
+
+Func __DROPBOX__COMM__TEST_WRITE_READ()
 	Local $strBuf = ""
 	$strBuf = "They Call Me Data"
+    __DROPBOX__COMM__CREATE_CHANNEL("comm", @ScriptDir)
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	;__DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "__DROPBOX__COMM__READ__DEMO_READER_2")
+	__DROPBOX__COMM__WRITE("comm", @ScriptDir, $strBuf)
+	Sleep(10000)
+	__DROPBOX__COMM__READ("comm", @ScriptDir, "__DROPBOX__COMM__READ__DEMO_READER")
+	__DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+EndFunc
 
-	__DROPBOX__COMM__WRITE("comm", @ScriptDir, $strBuf)
-	Sleep(10000)
-	;__DROPBOX__COMM__READ("comm", @ScriptDir, "__DROPBOX__COMM__READ__DEMO_READER")
-	Sleep(10000)
-	;; __DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
-	; __DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "__DROPBOX__COMM__READ__DEMO_READER")
-	__DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "__DROPBOX__COMM__READ__DEMO_READER_2")
-	Sleep(5000)
-	__DROPBOX__COMM__WRITE("comm", @ScriptDir, $strBuf)
-	Sleep(5000)
-	__DROPBOX__COMM__UNSUBSCRIBE_FUNCTION("__DROPBOX__COMM__READ__DEMO_READER_2")
+Func __DROPBOX__COMM__TEST_SUBSCRIBE_UNSUBSCRIBE()
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__CREATE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
 	__DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "__DROPBOX__COMM__READ__DEMO_READER")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__WRITE("comm", @ScriptDir, "They Call Me Data")
 	Sleep(10000)
-	__DROPBOX__COMM__WRITE("comm", @ScriptDir, $strBuf)
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__UNSUBSCRIBE("__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__WRITE("comm", @ScriptDir, "This is not supposed to show up")
+	Sleep(10000)
+	__DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+EndFunc
 
-	;__DROPBOX__COMM__PURGE("comm", @ScriptDir)
-	; __DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
-	ConsoleWrite("Hit bottom" & @LF)
-	Sleep(10000)
-	__DROPBOX__COMM__PURGE("comm", @ScriptDir)
-	Sleep(10000)
-	While True
-		Sleep(10000)
-		;__DROPBOX__COMM__WRITE("comm", @ScriptDir, $strBuf)
-	WEnd
-	Return
+; By no means are the following two functions the best way to perform
+; a "relay" using my library. The ideal solution would be to use
+; a verified copy function, like the one in my __FILE() library,
+; and then to copy the datagram from one channel to another.
+; anyway, there's more than one way to do it.
+Func __DROPBOX__COMM__TEST__MULTICHANNEL_RELAY1($hFile)
+	Local $szDatum = FileRead($hFile, -1) ; Read to end
+	FileClose($hFile)
+	ConsoleWrite("-----------------__DROPBOX__COMM__TEST__MULTICHANNEL_RELAY1---------------------" & @LF)
+	ConsoleWrite($szDatum & @LF)
+	ConsoleWrite("--------------------------------------------------------------------------------" & @LF)
+	__DROPBOX__COMM__WRITE("comm2", @ScriptDir, @LF & $szDatum)
+EndFunc
+
+Func __DROPBOX__COMM__TEST__MULTICHANNEL_RELAY2($hFile)
+	Local $szDatum = FileRead($hFile, -1) ; Read to end
+	FileClose($hFile)
+	ConsoleWrite("-----------------__DROPBOX__COMM__TEST__MULTICHANNEL_RELAY2---------------------" & @LF)
+	ConsoleWrite($szDatum & @LF)
+	ConsoleWrite("--------------------------------------------------------------------------------" & @LF)
+	__DROPBOX__COMM__WRITE("comm3", @ScriptDir, @LF & $szDatum)
+EndFunc
+
+Func __DROPBOX__COMM__TEST_MULTICHANNEL_MULTISUBSCRIBER()
+	ConsoleWrite("--> Testing multichannel mode." & @LF)
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__CREATE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__CREATE_CHANNEL("comm2", @ScriptDir, "__DROPBOX__CERR")
+    __DROPBOX__COMM__CREATE_CHANNEL("comm3", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "__DROPBOX__COMM__TEST__MULTICHANNEL_RELAY1")
+	__DROPBOX__COMM__SUBSCRIBE("comm2", @ScriptDir, "__DROPBOX__COMM__TEST__MULTICHANNEL_RELAY2")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	ConsoleWrite("--> Writing channel data " & @LF)
+	Local $i = 0
+	Local $max = 100
+	For $i = 0 To $max Step 1
+		__DROPBOX__COMM__WRITE("comm", @ScriptDir, "Datagram: " & $i & " of " & $max)
+	Next
+	Sleep(60000)
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__UNSUBSCRIBE()
+	Sleep(60000)
+	__DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__REMOVE_CHANNEL("comm2", @ScriptDir, "__DROPBOX__CERR")
+    __DROPBOX__COMM__REMOVE_CHANNEL("comm3", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+
+	__DROPBOX__COMM__TEST_MULTICHANNEL_MULTISUBSCRIBER2()
+EndFunc
+
+Func __DROPBOX__COMM__TEST_MULTICHANNEL_MULTISUBSCRIBER2()
+	ConsoleWrite("--> Testing multichannel mode (2)" & @LF)
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__CREATE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__CREATE_CHANNEL("comm2", @ScriptDir, "__DROPBOX__CERR")
+    __DROPBOX__COMM__CREATE_CHANNEL("comm3", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	ConsoleWrite("--> Writing channel data " & @LF)
+	Local $i = 0
+	Local $max = 100
+	For $i = 0 To $max Step 1
+		__DROPBOX__COMM__WRITE("comm", @ScriptDir, "Datagram: " & $i & " of " & $max)
+	Next
+	Sleep(60000)
+	__DROPBOX__COMM__SUBSCRIBE("comm", @ScriptDir, "__DROPBOX__COMM__TEST__MULTICHANNEL_RELAY1")
+	Sleep(100000)
+	; If you're going to subscribe more than one function to a channel that already has a lot of
+	; datagrams in it, then you want to wait a little while for it to process it before subscribing
+	; the second channel.
+	;
+	; I've played with this in the function above and had problems with it, so I suppose the solution,
+	; for now, is to wait a little while before subscribing another function to a channel that, could,
+	; potentially have quite a few datagrams left in it. There are many ways to fix this problem, I just
+	; haven't found out which one I want to do yet.
+	;  I could rebuild the model by which the delegates are called (the subscribers)
+	;  or... I could have __SUBSCRIBE() call the function passed in with a "READ" call and see how
+	;  if that works. Sounds to me like that'd be the best solution anyways.
+	; I'll decide later.
+	;
+	; That's what this test demonstrates.
+	; The ideal way to do this would be to do it in subscribe itself, so that after the function
+	; has subscribed to a channel, it reads some configuration information from the INI file,
+	; checks for datagrams in the existing directory, and then
+	__DROPBOX__COMM__SUBSCRIBE("comm2", @ScriptDir, "__DROPBOX__COMM__TEST__MULTICHANNEL_RELAY2")
+	__DROPBOX__COMM__TEST_DUMPVARS()
+	__DROPBOX__COMM__UNSUBSCRIBE()
+	Sleep(60000)
+	__DROPBOX__COMM__REMOVE_CHANNEL("comm", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__REMOVE_CHANNEL("comm2", @ScriptDir, "__DROPBOX__CERR")
+    __DROPBOX__COMM__REMOVE_CHANNEL("comm3", @ScriptDir, "__DROPBOX__CERR")
+	__DROPBOX__COMM__TEST_DUMPVARS()
 EndFunc
 
 Func __DROPBOX__COMM__READ__DEMO_READER_2($hFile)
@@ -279,7 +600,6 @@ Func __DROPBOX__COMM__CREATE_CHANNEL($szChannelName, $szChannelPath, $szLogFuncH
 	EndIf
 EndFunc
 
-; TODO!!!!
 ; This function removes a channel in the specified directory
 ; for communications to go through.
 ;
@@ -304,8 +624,69 @@ EndFunc
 ; Remarks:
 ;   TODO: Finish fixing this (so that it can remove a channel without removing all
 ;         subscribers from all channels.
-;   Looks like there is a bug in UNSUBSCRIBE_FUNCTION
+;   When you remove a channel, this function goes through the global list of subscribed functions,
+;    and iteratively removes them. This process runs at or above linear time, so, this operation is
+;    expensive. However, If your subscriber list is so large that you're running into some kind of a
+;    performance issue with the script itself and not whatever platform is facilitating the file-syncing
+;    then you have other problems...
 Func __DROPBOX__COMM__REMOVE_CHANNEL($szChannelName, $szChannelPath, $szLogFuncHandler = "__DROPBOX__CERR")
+	Local $szChannelComb = $szChannelPath & "\" & $szChannelName
+	If( FileExists($szChannelComb) <> 1 ) Then
+		; Channel doesn't exist, so there's nothing to remove.
+		SetError(-3)
+		Return True ; Should I return here?
+	EndIf
+If( $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS > 0 ) Then
+	Local $aszFuncListing = __DROPBOX__COMM__GET_SUBSCRIBED_FUNCTION_LIST($szLogFuncHandler)
+	Local $i = 0
+	For $i = 1 To $aszFuncListing[0] - 1 Step 1
+		Local $chan = ""
+		Local $path = ""
+		Local $buf1 = "" ; This is the data handler
+		Local $buf2 = "" ; This is the log func handler
+		Local $aszFuncData = __DROPBOX__COMM__GET_FUNCTION_DATA($aszFuncListing[$i], _
+																$chan, $path, $buf1, _
+																$buf2, $szLogFuncHandler)
+		Local $_szChannelComb = $path & "\" & $path
+		If( StringCompare($_szChannelComb, $szChannelComb, 2) = 0 ) Then
+			; The channel name and paths match, so, remove that function.
+			Local $retVal = __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($aszFuncListing[$i], $szLogFuncHandler)
+			If( $retVal = False ) Then
+				; There was an error
+				Local $tmpExtended = @error
+				Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), there was an error," & _
+										"unsubscribing a function, " & $aszFuncListing[$i] & ". " & _
+										"@error is " & @error & ".")
+				; At this point, there's nothing that I know to do.
+				SetError(-2, $tmpExtended)
+				; Don't return here, because we want to finish removing the channel.
+			EndIf
+		EndIf
+	Next
+EndIf
+	Local $oChannelDeletionResult = DirRemove($szChannelPath & "\" & $szChannelName, 1)
+	If( $oChannelDeletionResult = 0 ) Then ; There was a problem.
+			Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), error removing channel dir.")
+		If( FileExists($szChannelPath & "\" & $szChannelName) = 0 ) Then
+			; Dir doesn't exist, but, prior to entering this section of the massive IF statment
+			; (the one in the beginning), the directory must have existed for us to get to this
+			; point, and for the control flow to get here at this point means that we're at a
+			; logical contradiction... and therefore there's a bug in the logic.
+			;
+			; Code can't just magically change it's mind, that's why I call it bad magic.
+			Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), channel dir doesn't exist. BAD MAGIC")
+			SetError(-3)
+			Return True
+		Else
+			Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), channel exists, but cannot be deleted.")
+			SetError(-4)
+			Return False
+		EndIf
+	Else
+		Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), successfully removed channel.")
+		Return True
+	EndIf
+	#cs -- TODO: Remove this code.
 	If( FileExists($szChannelPath & "\" & $szChannelName) = 1 ) Then ; Channel exists
 		Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), file exists")
 		; Remove all the datagrams & channel directory.
@@ -381,39 +762,7 @@ Func __DROPBOX__COMM__REMOVE_CHANNEL($szChannelName, $szChannelPath, $szLogFuncH
 	EndIf
 	Call($szLogFuncHandler, "In __DROPBOX__COMM__REMOVE_CHANNEL(), BAD MAGIC ON: " & @ScriptLineNumber)
 	; I just had a feeling.
-EndFunc
-
-; Not intended to be called from the outside,
-; but this function execs the stuff that was
-; assigned in __SUBSCRIBE().
-Func PRIVATE__DROPBOX__COMM__PARSE_SUBSCRIBERS()
-	Local $i = 0
-	 ;ConsoleWrite("DEBUG: " & "Called" & @LF)
-	 ; Left off here.
-	 ; Gotta write some code to parse through
-	 ; __DROPBOX__list subscribers bla bla bla
-	 ; and then figure out how to iterate
-     ;	 through
-	 ; that mess in this function.
-	 Local $aszListing = StringSplit($__DROPBOX__szREGISTERED_FUNCTIONS, "|")
-	 ; _ArrayDisplay($aszListing, "Stuff")
-	For $i = 1 To $aszListing[0]-1 Step 1
-		; ConsoleWrite("DEBUG: " & $aszListing[$i])
-		;__PRIVATE__DROPBOX__COMM__SUBSCRIBE_
-		Local $chan = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
-					$aszListing[$i] & "_szChannelName")
-		;ConsoleWrite("DEBUG: " & $chan & @LF)
-		Local $path = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
-					$aszListing[$i] & "_szChannelPath")
-		;ConsoleWrite("DEBUG: " & $path & @LF)
-		Local $hand = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
-					$aszListing[$i] & "_szFuncDataHandler")
-		; ConsoleWrite("DEBUG: " & Eval($hand) & @LF)
-		Local $logf = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
-					$aszListing[$i] & "_szLogFuncHandler")
-		;ConsoleWrite("DEBUG: " & $logf & @LF)
-		__DROPBOX__COMM__READ($chan, $path, $hand, $logf)
-	Next
+	#ce
 EndFunc
 
 ; This function takes a single parameter, $szFunctionName,
@@ -534,19 +883,19 @@ Func __DROPBOX__COMM__SUBSCRIBE($szChannelName, $szChannelPath, $szFuncDataHandl
 	EndIf
 
 	If( _
-		$__DROPBOX__REGISTERED_SUBSCRIBERS = 0 _
+		$PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = 0 _
 		OR _
-		$__DROPBOX__REGISTERED_SUBSCRIBERS < $__DROPBOX__iDEFAULT_MAX_REGISTERED_SUBSCRIBERS _
+		$PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS < $__DROPBOX__iDEFAULT_MAX_REGISTERED_SUBSCRIBERS _
 	   ) Then
 
 		Local $oChannelIniCreationResult = IniWrite($szChannelPath & "\" & $szChannelName & "\" & _
 				@ComputerName & ".ini" , $szChannelName & "-Listening", $szFuncDataHandler, _
 				__DROPBOX__COMM__EPOCH())
 
-		$__DROPBOX__REGISTERED_SUBSCRIBERS = $__DROPBOX__REGISTERED_SUBSCRIBERS + 1
+		$PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS + 1
 		$__DROPBOX__szREGISTERED_FUNCTIONS &= $szFuncDataHandler & "|"
 		Call($szLogFuncHandler, "In __DROPBOX__COMM__SUBSCRIBE(), adding subscriber " & "#" & _
-		     $__DROPBOX__REGISTERED_SUBSCRIBERS &" : " & $szFuncDataHandler & "().")
+		     $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS &" : " & $szFuncDataHandler & "().")
 		Local $j1 = Assign("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
 					$szFuncDataHandler & "_szChannelName", $szChannelName, 2)
 		Local $j2 = Assign("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
@@ -558,7 +907,7 @@ Func __DROPBOX__COMM__SUBSCRIBE($szChannelName, $szChannelPath, $szFuncDataHandl
 		;ConsoleWrite($j1 & " :: " & $j2 & " :: " & $j3 & " :: " & $j4 & @LF)
 
 		If( ($j1 + $j2 + $j3 + $j4) = 4) Then
-			If( $__DROPBOX__REGISTERED_SUBSCRIBERS <= 1 ) Then
+			If( $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS <= 1 ) Then
 				AdlibRegister("PRIVATE__DROPBOX__COMM__PARSE_SUBSCRIBERS", _
 							$__DROPBOX__iDEFAULT_CHANNEL_POLLING_PERIOD)
 			EndIf
@@ -594,6 +943,34 @@ Func __DROPBOX__COMM__SUBSCRIBE($szChannelName, $szChannelPath, $szFuncDataHandl
 	EndIf
 EndFunc
 
+; Not intended to be called from the outside,
+; but this function execs the stuff that was
+; assigned in __SUBSCRIBE().
+Func PRIVATE__DROPBOX__COMM__PARSE_SUBSCRIBERS()
+	AdlibUnRegister("PRIVATE__DROPBOX__COMM__PARSE_SUBSCRIBERS")
+	Local $i = 0
+	 Local $aszListing = StringSplit($__DROPBOX__szREGISTERED_FUNCTIONS, "|")
+	 ; _ArrayDisplay($aszListing, "Stuff")
+	For $i = 1 To $aszListing[0]-1 Step 1
+		; ConsoleWrite("DEBUG: " & $aszListing[$i] & @LF)
+		;__PRIVATE__DROPBOX__COMM__SUBSCRIBE_
+		Local $chan = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
+					$aszListing[$i] & "_szChannelName")
+		;ConsoleWrite("DEBUG: " & $chan & @LF)
+		Local $path = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
+					$aszListing[$i] & "_szChannelPath")
+		;ConsoleWrite("DEBUG: " & $path & @LF)
+		Local $hand = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
+					$aszListing[$i] & "_szFuncDataHandler")
+		; ConsoleWrite("DEBUG: " & Eval($hand) & @LF)
+		Local $logf = Eval("__PRIVATE__DROPBOX__COMM__SUBSCRIBE_" & _
+					$aszListing[$i] & "_szLogFuncHandler")
+		;ConsoleWrite("DEBUG: " & $logf & @LF)
+		__DROPBOX__COMM__READ($chan, $path, $hand, $logf)
+		Sleep($__DROPBOX__iINTERVAL_BETWEEN_SUBSCRIBER_NOTIFY)
+	Next
+	AdlibRegister("PRIVATE__DROPBOX__COMM__PARSE_SUBSCRIBERS", $__DROPBOX__iDEFAULT_CHANNEL_POLLING_PERIOD)
+EndFunc
 
 ; The following function is used by __UNSUBSCRIBE()
 ; to alert the user if a deadlock error happens where,
@@ -630,82 +1007,54 @@ EndFunc
 ;   -2: General failure
 ;
 ; Remarks:
-; This function will always return true. Check @error for results.
-Func __DROPBOX__COMM__UNSUBSCRIBE($szFuncDataHandler = "-1", $szLogFuncHandler = "__DROPBOX__CERR")
-	If( $__DROPBOX__REGISTERED_SUBSCRIBERS < 1 ) Then
+;    1). This function will always return true. Check @error for results.
+;    2). This function has some bad bugs in it that are a result of poor
+;        design and forethought on my part. This function should really
+;        be named UNSUBSCRIBE_ALL() and remove all of the functions from
+;        the list and reset everything, but instead... I attempted to
+;        combine the behavior of an UNSUBSCRIBE_ALL() function into a
+;        function that could unsubscribe individual functions as well
+;        as all functions.
+;
+;        "Oh, well, that's easy, you can just. Iterate through the ...
+;         and do ..."
+;         No.
+;
+; Issues:
+;    1). It's not recommended that you use this function.
+;
+; Known Bugs:
+;    1). There's a problem in this function where, when you call it, it will unsubscribe
+;        all the functions that are active. This is not desireable behavior.
+Func __DROPBOX__COMM__UNSUBSCRIBE($szLogFuncHandler = "__DROPBOX__CERR")
+	If( $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = 0 ) Then
 		Call($szLogFuncHandler, "In __DROPBOX__COMM_UNSUBSCRIBE(), attempted to unsubscribe when there are no subscribers.")
 		SetError(-1)
-		Return False
+		Return True
 	EndIf
-
-	; This is where it gets hairy. If
-	; the function is not -1, that means
-	; we have to unsubscribe from an
-	; individual function.
-	If( $szFuncDataHandler <> "-1" ) Then
-		Local $bResult = __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($szFuncDataHandler, $szLogFuncHandler)
-		If( $bResult = False ) Then
-			Local $iErrorCode = @error
-			Local $szErrorMsg = "In __DROPBOX__COMM_UNSUBSCRIBE(), error unsubscribing function " & $szFuncDataHandler & "."
-			$szErrorMsg &= " Code: "
-
-			Select
-				Case $iErrorCode = 0
-					$szErrorMsg &= " 0, meaning no problems. BAD MAGIC."
-				Case $iErrorCode = -1
-					$szErrorMsg &= " -1, meaning no subscribers are registered."
-				Case $iErrorCode = -2
-					$szErrorMsg &= " -2, meaning problem assigning data to function list."
-				Case Else
-					$szErrorMsg &= " BAD MAGIC."
-			EndSelect
-			SetError(-2)
-			Call($szLogFuncHandler, $szErrorMsg)
-		Else
-			SetError(0)
-			Call($szLogFuncHandler, "In __DROPBOX__COMM_UNSUBSCRIBE(), removed callback function " & $szFuncDataHandler)
+	Local $aszFuncListing = __DROPBOX__COMM__GET_SUBSCRIBED_FUNCTION_LIST($szLogFuncHandler)
+	;_ArrayDisplay($aszFuncListing)
+	Local $i = 0
+	For $i = 1 To $aszFuncListing[0] Step 1
+		Local $chan = ""
+		Local $path = ""
+		Local $buf1 = "" ; This is the data handler
+		Local $buf2 = "" ; This is the log func handler
+		Local $aszFuncData = __DROPBOX__COMM__GET_FUNCTION_DATA($aszFuncListing[$i], _
+																$chan, $path, $buf1, _
+																$buf2, $szLogFuncHandler)
+		Local $_szChannelComb = $path & "\" & $path
+		Local $retVal = __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($aszFuncListing[$i], $szLogFuncHandler)
+		If( $retVal = False ) Then
+			; There was an error
+			Local $tmpExtended = @error
+			Call($szLogFuncHandler, "In __DROPBOX__COMM__UNSUBSCRIBE(), there was an error," & _
+									"unsubscribing a function, " & $aszFuncListing[$i] & ". " & _
+									"@error is " & @error & ".")
+			; At this point, there's nothing that I know to do.
+			SetError(-2, $tmpExtended)
 		EndIf
-	Else
-		; This clause means that we have to remove all the subscribed functions.
-		Local $aszFuncListing = StringSplit($__DROPBOX__szREGISTERED_FUNCTIONS, "|")
-		Local $i = 0;
-		For $i = 1 To $aszFuncListing[0]-1 Step 1
-			Local $bResult = __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($szFuncDataHandler, $szLogFuncHandler)
-			If( $bResult = False ) Then
-				Local $iErrorCode = @error
-				Local $szErrorMsg = "In __DROPBOX__COMM_UNSUBSCRIBE(), error unsubscribing function " & $szFuncDataHandler & "."
-				$szErrorMsg &= " Code: "
-				Select
-					Case $iErrorCode = 0
-						$szErrorMsg &= " 0, meaning no problems. BAD MAGIC."
-					Case $iErrorCode = -1
-						$szErrorMsg &= " -1, meaning no subscribers are registered."
-					Case $iErrorCode = -2
-						$szErrorMsg &= " -2, meaning problem assigning data to function list."
-					Case Else
-						$szErrorMsg &= " BAD MAGIC."
-				EndSelect
-				SetError(-2)
-				Call($szLogFuncHandler, $szErrorMsg)
-			Else
-				SetError(0)
-				$__DROPBOX__REGISTERED_SUBSCRIBERS = $__DROPBOX__REGISTERED_SUBSCRIBERS - 1
-				Call($szLogFuncHandler, "In __DROPBOX__COMM_UNSUBSCRIBE(), removed callback function " & $szFuncDataHandler)
-			EndIf
-		Next
-
-		; This is the major difference between the behavior of __SUBSCRIBE and
-		; __UNSUBSCRIBE. No matter what happens, __UNSUBSCRIBE makes a best-effort
-		; attempt to unregister the callback function from being called.
-		; AdlibUnRegister("PRIVATE__DROPBOX__COMM__PARSE_SUBSCRIBERS")
-		; Now, the really smart thing to do would be to do this:
-		AdLibUnRegister()
-		; Because, this way, it unregisters the last registered AdLib function
-
-		$__DROPBOX__REGISTERED_SUBSCRIBERS = 0
-		Call($szLogFuncHandler, "In __DROPBOX__COMM_UNSUBSCRIBE(), removed callback function.")
-	EndIf
-	Return True
+	Next
 EndFunc
 
 ; This function unsubscribes a specified function
@@ -735,13 +1084,16 @@ EndFunc
 ;   still be called by the program while it is reading info
 ;   from a channel.
 ;
+;   If the function specified in $f2 gets called, that means
+;   something was not removed from the list correctly. Get it?
+;
 ;   It's a bit to wrap your head around, but if you've gotten
 ;   this far, you know what I mean.
 Func __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($szFuncName, $szLogFuncHandler = "__DROPBOX__CERR")
-	If( $__DROPBOX__REGISTERED_SUBSCRIBERS < 1 ) Then
+	If( $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = 0 ) Then
 		Call($szLogFuncHandler, "In __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION(), attempted to unsubscribe when there are no subscribers.")
 		SetError(-1)
-		Return False
+		Return True
 	EndIf
 
 	; $f is an alias for that damn long function name.
@@ -762,32 +1114,43 @@ Func __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($szFuncName, $szLogFuncHandler = "__D
 	Local $oChannelIniListDResult = IniWrite($path & "\" & $chan & "\" & _
 				@ComputerName & ".ini" , $chan & "-Listening", $szFuncName, -1)
 
+
 	If( ($j1 + $j2 + $j3 + $j4) = 4) Then
-		Local $aszFuncListing = StringSplit($__DROPBOX__szREGISTERED_FUNCTIONS, "|")
+		Local $aszFuncListing = __DROPBOX__COMM__GET_SUBSCRIBED_FUNCTION_LIST($szLogFuncHandler)
 		Local $szNewRegisteredFunctionsList = ""
 		; Perform a linear search on the function
 		; list and locate the index of the unsubscribed
 		; function and remove it
 		Local $i = 0
 		Local $iFoundIndex = -1
-		For $i = 1 To $aszFuncListing[0]-1 Step 1
-			Local $cmpr = StringCompare($szFuncName, $aszFuncListing[$i], 1) ; Case sensitive
+		For $i = 1 To $aszFuncListing[0] Step 1
+			Local $cmpr = StringCompare($szFuncName, $aszFuncListing[$i], 2) ; Case insensitive
 			If( $cmpr = 0 ) Then
 				; Found it
 				$iFoundIndex = $i
 			Else
-				; Add the function to the new list
-				$szNewRegisteredFunctionsList &= $aszFuncListing & "|"
+				; Add the function to the new list.
+				$szNewRegisteredFunctionsList &= $aszFuncListing[$i] & "|"
 			EndIf
 		Next
+		$__DROPBOX__szREGISTERED_FUNCTIONS = $szNewRegisteredFunctionsList
 		If( $iFoundIndex = -1 ) Then
-			Call($szLogFuncHandler, "In __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION(), removal was successful. Function not found. BAD MAGIC.")
+			Call($szLogFuncHandler, "In __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION(), removal was successful. Function not found. BAD MAGIC." & $szFuncName)
 			SetError(-1)
 		Else
 			Call($szLogFuncHandler, "In __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION(), successfully removed subscriber info.")
 			SetError(0)
 		EndIf
-
+		$PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS - 1
+		Return True
+		; Rationale: We'll return true in this cause because at this point the end case is the same regardless of whether or not
+		;             this function exists. We should return true so long as the function (to the script's knowledge) is not there
+		;             after returning from the script.
+		;
+		;            If the error where @error is -1 (where there is obviously some BAD MAGIC going on since in order for the control
+		;             flow to reach that point, that means that the function must have existed, but if the iterative search through.
+		;             the function listing was not able to locate the desired function, it points to a logical fallacy showing a bug
+		;             in disguise. (And these days, the bugs have gotten awfully stealthy).
 	Else
 		Local $szLogErrMessageForAssign = "The following assignments have failed: "
 		If( $j1 = 0 ) Then
@@ -809,6 +1172,7 @@ Func __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION($szFuncName, $szLogFuncHandler = "__D
 		Call($szLogFuncHandler, "In __DROPBOX__COMM__UNSUBSCRIBE_FUNCTION(), there was a problem calling Assign()." & _
 								$szLogErrMessageForAssign)
 		SetError(-2)
+		Return False
 	EndIf
 EndFunc
 
@@ -852,7 +1216,12 @@ EndFunc
 ;  file locking problem that can sometimes happen
 ;  when a client is listening while another is
 ;  writing the information. (See __READ())
+
 Func __DROPBOX__COMM__WRITE($szChannelName, $szChannelPath, $szData, $szLogFuncHandler = "__DROPBOX__CERR")
+	Sleep(1000) ; I hate to have to use sleeps in my functions, but until the time gets changed from unix
+	; epoch time to something that supports a higher resolution, then the transmission speed limit in
+	; datagrams per second is limited to 1dg/s. However... within reason, you can put as much information
+	; into one datagram as you'd like.
 	Call($szLogFuncHandler, "In __DROPBOX__COMM__WRITE(), transmitting information...")
 	Local $DatumBuff = ""
 	Local $TxTime = __DROPBOX__COMM__EPOCH()
@@ -894,6 +1263,7 @@ EndFunc
 
 Func __DROPBOX__COMM__READ__DEMO_READER($hFile)
 	Local $szDatum = FileRead($hFile, -1) ; Read to end
+	FileClose($hFile)
 	ConsoleWrite("--------------------------------------------------------------------------------" & @LF)
 	ConsoleWrite($szDatum & @LF)
 	ConsoleWrite("--------------------------------------------------------------------------------" & @LF)
@@ -917,12 +1287,7 @@ EndFunc
 ;    True: If successful
 ;    False: If not successful, and sets @error
 ; @error:
-;    -1: Error opening up tmp datagram file for
-;        writing.
-;    -2: Error writing datagram information to
-;        the file
-;    -3: Error moving (renaming) file to .dg
-;        extension. (See remarks)
+;	Returns nothing.
 ;
 ; Remarks:
 ;   The way this function works is a bit quirky,
@@ -944,21 +1309,37 @@ EndFunc
 ;  the first time. If you're in a channel containing a
 ;  lot of files you have not read... it may not be nice
 ;  to you.
+;
+; TODO: Contemplate adding @error signals and such to this function
+;		--> Issues:
+;			1). This function is usually called by the __PARSE_SUBSCRIBERS()
+; 				function, indirectly. So, we shouldn't have to think about
+;				handling errors in this function. It either works or it
+;				doesn't. If it doesn't, there's not much that can be done
+;				about it.
+;			2). Should this function, when it recieves a datagram, send
+;				a file handle back to $szFuncReader or should it send an
+;				array or a string?
 Func __DROPBOX__COMM__READ($szChannelName, $szChannelPath, $szFuncReader, $szLogFuncHandler = "__DROPBOX__CERR")
 	Local $szChannelComb = $szChannelPath & "\" & $szChannelName
 	Local $iDateTimeFilter = IniRead($szChannelComb & "\" & @ComputerName & ".ini", _
 							$szChannelName & "-LastRx", $szFuncReader, -1)
 	Local $aszListing = _FileListToArray($szChannelComb, "*.dg", 1)
-	;_ArrayDisplay($aszListing)
+	Local $iELOS = $PRIVATE__DROPBOX__COMM__NUMBER_DIGITS_IN_EPOCH
+	; _ArrayDisplay($aszListing)
 	Local $i = 0
 	Local $hFileToRead
 	Local $iMostRecentDateTime = 0
 	For $i = 1 To UBound($aszListing)-1 Step 1
-		If( StringLeft($aszListing[$i], 10) > $iMostRecentDateTime ) Then
-					$iMostRecentDateTime = StringLeft($aszListing[$i], 10)
-				If(StringLeft($aszListing[$i], 10) > $iDateTimeFilter) Then
+		If( StringLeft($aszListing[$i], $iELOS) > $iMostRecentDateTime ) Then
+					$iMostRecentDateTime = StringLeft($aszListing[$i], $iELOS)
+				If(StringLeft($aszListing[$i], $iELOS) > $iDateTimeFilter) Then
 					$hFileToRead = FileOpen($szChannelComb & "\" & $aszListing[$i]) ; Read only
 					Call($szFuncReader, $hFileToRead)
+					; I'm expecting the user to close the file after
+					; they're done using it after it returns from the
+					; Call() done in the line prior, however, if they
+					; don't close it, then I'll close it myself.
 					FileClose($hFileToRead)
 				EndIf
 		Else
@@ -1042,12 +1423,12 @@ EndFunc
 ;	-1: No subscribed functions
 ;
 ; Remarks:
-;
-;
+;    This function is used to get a list of functions. Use this instead of manually
+;    iterating through $__DROPBOX__szREGISTERED_FUNCTIONS.
 Func __DROPBOX__COMM__GET_SUBSCRIBED_FUNCTION_LIST($szLogFuncHandler = "__DROPBOX__CERR")
 	Local $aszSubscribedFunctionList = $__DROPBOX__szREGISTERED_FUNCTIONS
 	Local $aszRetVal = StringSplit("-1|-1|-1", "|")
-	If( $__DROPBOX__REGISTERED_SUBSCRIBERS = 0 ) Then
+	If( $PRIVATE__DROPBOX__REGISTERED_SUBSCRIBERS = 0 ) Then
 		; There are no functions subscribed.
 		Call($szLogFuncHandler, "In __DROPBOX__COMM__GET_SUBSCRIBED_FUNCTION_LIST(), was " & _
 			 "called when there are no registered subscribers.")
@@ -1063,10 +1444,13 @@ Func __DROPBOX__COMM__GET_SUBSCRIBED_FUNCTION_LIST($szLogFuncHandler = "__DROPBO
 		;
 		; So, as a simple fix, we have an if clause to check for it.
 		; Will this blow up? Probably.
-		; TODO: LEFT OFF HERE 072212
 		If( StringRight($__DROPBOX__szREGISTERED_FUNCTIONS, 1) <> "|" ) Then
+			; The $__DROPBOX__szREGISTERED_FUNCTIONS variable doesn't contain
+			; a | on the last line (which would yield a off-by-one bug), so
+			; we can just call StringSplit() and return back an array.
 			$aszRetVal = StringSplit($__DROPBOX__szREGISTERED_FUNCTIONS, "|")
 		Else
+			; Otherwise, the contrary has happened...
 			$aszRetVal = StringSplit _
 						 ( _
 							StringTrimRight _
@@ -1093,5 +1477,7 @@ EndFunc
 ;;; END Communications through dropbox section.
 
 Func __DROPBOX__CERR($szMsg)
-	ConsoleWrite($szMsg & @LF)
+	If($__DROPBOX__bHUSH_CERR = False ) Then
+		ConsoleWrite($szMsg & @LF)
+	EndIf
 EndFunc

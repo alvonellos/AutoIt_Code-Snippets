@@ -2,6 +2,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
+#AutoIt3Wrapper_Add_Constants=n
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
 
@@ -49,5 +50,11 @@ EndFunc
 
 Func input()
 		Local $input = InputBox("", "enter message", "none", "", 100, 100)
-		__DROPBOX__COMM__WRITE("comm", @ScriptDir, $input, "dumb")
+		If($input = "purge") Then
+			__DROPBOX__COMM__PURGE("comm", @ScriptDir, "dumb")
+		ElseIf( $input <> "none" ) Then
+			; do nothing
+		Else
+			__DROPBOX__COMM__WRITE("comm", @ScriptDir, $input, "dumb")
+		EndIf
 EndFunc
