@@ -876,10 +876,12 @@ EndFunc
 ;   At this point, I've only coded this library to handle
 ;   only one subscriber at a time. It wouldn't be too hard
 ;   to add it, but I'm working on it...
-Func __DROPBOX__COMM__SUBSCRIBE($szChannelName, $szChannelPath, $szFuncDataHandler, $szLogFuncHandler = "__DROPBOX__CERR")
-	If( FileExists($szChannelPath & "\" & $szChannelName) = 0 ) Then
-		SetError(0)
-		Return False
+Func __DROPBOX__COMM__SUBSCRIBE($szChannelName, $szChannelPath, $szFuncDataHandler, $szLogFuncHandler = "__DROPBOX__CERR", $szListenMode = False)
+	If( $szListenMode = False ) Then
+		If( FileExists($szChannelPath & "\" & $szChannelName) = 0 ) Then
+			SetError(0)
+			Return False
+		EndIf
 	EndIf
 
 	If( _
@@ -1229,7 +1231,7 @@ Func __DROPBOX__COMM__WRITE($szChannelName, $szChannelPath, $szData, $szLogFuncH
 	$DatumBuff &= @ComputerName & @LF
 	$DatumBuff &= StringLen($szData) & @LF
 	$DatumBuff &= $szData
-	$szFileName = $szChannelPath & "\" & $szChannelName & "\" & $TxTime
+	Local $szFileName = $szChannelPath & "\" & $szChannelName & "\" & $TxTime
 	Local $szChannelComb = $szChannelPath & "\" & $szChannelName
 	Local $hFileOpenHandle = FileOpen($szFileName, 10)
 	If( $hFileOpenHandle = -1 ) Then ; There was an error

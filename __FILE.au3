@@ -34,7 +34,7 @@ EndFunc
 Func __FILE__INITIALIZE()
 	Local $bCryptStartupReturnVal = _Crypt_Startup()
 	If( $bCryptStartupReturnVal = True ) Then ; There wasn't an error
-		Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "In __FILE__INITIALIZE, _Crypt_Startup() initialization successful")
+		; Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "In __FILE__INITIALIZE, _Crypt_Startup() initialization successful")
 	Else ; There was an error and $cryptStartupReturnVal will be false
 		Select
 			case @error = 1
@@ -55,7 +55,7 @@ Func __FILE__HASH($szFileName)
 	If( @error = 0 ) Then ; There wasn't a problem
 		Return $szFileHashData
 	Else
-		Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "Error for file: " & $szFileName)
+		Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "Error " & @error & " for file: " & $szFileName)
 		Select
 			case @error = 1
 				Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "In __FILE__HASH, failed to open file. @error = " & @error)
@@ -65,6 +65,7 @@ Func __FILE__HASH($szFileName)
 				Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "In __FILE__HASH, failed to hash piece. @error = " & @error)
 			case Else
 				Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "In __FILE__HASH, bad magic. @error = " & @error)
+				Return $szFileHashData
 		EndSelect
 		Return -1
 	EndIf
@@ -141,6 +142,8 @@ EndFunc
 ; TODO: Cleanup this code. Holy <expletive>.
 ; Fix a bug where the program doesn't handle only having one file in dir
 ; ^I think I fixed that already, but it's 6 am and I'm not sure.
+; There's a bug in here. $szListDirectoryBasePath doesn't have a
+; directory in it, it bombs.
 Func __FILE__LIST($szListDirectoryBasePath)
 	__STACK__DEALLOC() ; Delete w/e is in the stack
 	Local $szDirRoot = $szListDirectoryBasePath
@@ -172,10 +175,15 @@ Func __FILE__LIST($szListDirectoryBasePath)
 			StringTrimRight($aszFileList, 1) ; Remove the 0
 		Else ; Good to go.
 			; This is the file listing part.
-			If( $aszDirList = 0 ) Then ; There was a problem
+			If( $aszDirList = 0 ) Then ; There was a problem no dirs.
 				; Call($__FILE__DEFAULT_LOGGING_FUNCTION,  "In __FILE__LIST(), there was a problem listing dirs in root dir. @error = " & @error)
 				SetError(-4)
 				StringTrimRight($aszDirList, 1) ; Remove the 0
+				$aszFileList = _FileListToArray($szListDirectoryBasePath, "*", 1)
+				Local $i = 0
+				For $i = 1 To $aszFileList[0] Step 1
+					$szFileList &= $szDirRoot & "\" & $aszFileList[$i] & ","
+				Next
 			Else
 				; Grab the files in that directory and concatenate them to a
 				; listiing
