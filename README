@@ -15,6 +15,7 @@ Remarks:
   rule of thumb, the more complex the code is, the longer
   my variable names are going to be. 
 
+
 __FILE.au3:
     This is a function library that includes a bunch of
   miscellaneous functions that are used for well -- you
@@ -57,3 +58,12 @@ __DROPBOX.au3
   use this library. 
 
     If anything, it's just neat. 
+
+__CCLEANER.au3:
+    This function contains other functions used in running CCleaner in
+  a batched, silent mode. Read the file and comment/uncomment stuff to
+  get it to run in your particular situation
+
+__DEFRAGGLER.au3:
+    This function contains other functions and code used in running
+  defraggler, this is a sister library to __CCleaner.au3.
